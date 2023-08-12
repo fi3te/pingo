@@ -54,6 +54,7 @@ func Ping(target string, packetCount int, timeout time.Duration, ls *logging.Log
 	pinger.SetPrivileged(true)
 	pinger.Count = packetCount
 	pinger.Timeout = timeout
+	pinger.Size = 548
 	result.Err = pinger.Run()
 	if result.Err != nil {
 		ls.Debug.Printf("Ping for target %s failed: %v", target, result.Err)

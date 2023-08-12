@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 func main() {
 	logLevelPtr := flag.Int("logLevel", int(logging.LevelError), fmt.Sprintf("log level (debug=%d, info=%d, error=%d)", logging.LevelDebug, logging.LevelInfo, logging.LevelError))
 	cidrPtr := flag.String("cidr", "", "targets in CIDR notation, e.g. 192.168.0.0/24")
-	knownDevicesFilePtr := flag.String("knownDevicesFile", "", "file with known devices (line format: <mac address>;<name>)")
+	knownDevicesFilePtr := flag.String("knownDevicesFile", "devices.csv", "file with known devices (line format: <mac address>;<name>)")
 	flag.Parse()
 
 	ls := logging.New(logging.LogLevel(*logLevelPtr))
@@ -81,17 +82,52 @@ func filterResults(results []network.PingResult, ls *logging.LogSetup) []network
 }
 
 func printResult(entries []network.ArpTableEntry, macAddressMapping map[string]string) {
-	w := tabwriter.NewWriter(os.Stdout, 1, 1, 1, ' ', 0)
-	defer w.Flush()
-	fmt.Fprintf(w, "IP\tMAC address\tDevice name\n")
-	for _, entry := range entries {
+	table := buildTable(entries, macAddressMapping)
+	printTable(table)
+}
+
+func buildTable(entries []network.ArpTableEntry, macAddressMapping map[string]string) [][]string {
+	showMappingColumn := len(macAddressMapping) > 0
+	columns := 2
+	if showMappingColumn {
+		columns = 3
+	}
+	rows := len(entries) + 1
+
+	table := make([][]string, rows)
+
+	header := make([]string, columns)
+	header[0] = "IP"
+	header[1] = "MAC address"
+	if showMappingColumn {
+		header[2] = "Device name"
+	}
+	table[0] = header
+
+	for i, entry := range entries {
 		if entry.MacAddress == "" {
 			entry.MacAddress = "-"
 		}
-		mappingValue := macAddressMapping[entry.MacAddress]
-		if mappingValue == "" {
-			mappingValue = "-"
+		row := make([]string, columns)
+		row[0] = entry.IpAddress
+		row[1] = entry.MacAddress
+		if showMappingColumn {
+			mappingValue := macAddressMapping[entry.MacAddress]
+			if mappingValue == "" {
+				mappingValue = "-"
+			}
+			row[2] = mappingValue
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\n", entry.IpAddress, entry.MacAddress, mappingValue)
+		table[i+1] = row
+	}
+
+	return table
+}
+
+func printTable(table [][]string) {
+	w := tabwriter.NewWriter(os.Stdout, 1, 1, 1, ' ', 0)
+	defer w.Flush()
+	for _, row := range table {
+		fmt.Fprintf(w, strings.Join(row[:], "\t")+"\n")
 	}
 }
